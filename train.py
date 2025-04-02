@@ -477,10 +477,10 @@ def main():
     X_val, X_test, y_val, y_test = train_test_split(X_temp, y_temp, test_size=0.5, random_state=42)
     print("Data split complete.")
     # 4. Polynomial SVM
-    # svm_clf = SVC(kernel='poly', degree=4,verbose=True)
-    # svm_clf.fit(X_train.reshape(len(X_train), -1), y_train)
-    # print("Polynomial SVM score:", svm_clf.score(X_test.reshape(len(X_test), -1), y_test))
-    # evaluate_model_sklearn(svm_clf, X_test.reshape(len(X_test), -1), y_test, model_name="Polynomial SVM")
+    svm_clf = SVC(kernel='poly', degree=4,verbose=True)
+    svm_clf.fit(X_train.reshape(len(X_train), -1), y_train)
+    print("Polynomial SVM score:", svm_clf.score(X_test.reshape(len(X_test), -1), y_test))
+    evaluate_model_sklearn(svm_clf, X_test.reshape(len(X_test), -1), y_test, model_name="Polynomial SVM")
 
     # 5. Simple Regression (Logistic Regression)
     # logreg = LogisticRegression()
@@ -504,29 +504,29 @@ def main():
 
 
     # 6. Improved Attention NN
-    print("Training Improved Attention NN...")
-    print(f"Input embedding dimension: {embeddings.shape[2]}")
-    print(f"Training set size: {len(X_train)}")
-    print(f"Validation set size: {len(X_val)}")
-    print(f"Test set size: {len(X_test)}")
-    print("-" * 50)
+    # print("Training Improved Attention NN...")
+    # print(f"Input embedding dimension: {embeddings.shape[2]}")
+    # print(f"Training set size: {len(X_train)}")
+    # print(f"Validation set size: {len(X_val)}")
+    # print(f"Test set size: {len(X_test)}")
+    # print("-" * 50)
     
-    attn_model = ImprovedAttentionNN(embed_dim=embeddings.shape[2])
-    best_val_loss, best_epoch = train_pytorch_model(
-        attn_model,
-        X_train, y_train,
-        X_val, y_val,
-        epochs=1000,
-        batch_size=64,
-        lr=1e-4
-    )
+    # attn_model = ImprovedAttentionNN(embed_dim=embeddings.shape[2])
+    # best_val_loss, best_epoch = train_pytorch_model(
+    #     attn_model,
+    #     X_train, y_train,
+    #     X_val, y_val,
+    #     epochs=1000,
+    #     batch_size=64,
+    #     lr=1e-4
+    # )
     
-    print("\nFinal Evaluation:")
-    print("-" * 50)
-    evaluate_model_pytorch(attn_model, X_test, y_test, model_name="Improved Attention NN")
-    print(f"Best validation loss: {best_val_loss:.4f} at epoch {best_epoch+1}")
+    # print("\nFinal Evaluation:")
+    # print("-" * 50)
+    # evaluate_model_pytorch(attn_model, X_test, y_test, model_name="Improved Attention NN")
+    # print(f"Best validation loss: {best_val_loss:.4f} at epoch {best_epoch+1}")
 
-    print("\nTraining complete!")
+    # print("\nTraining complete!")
 
     # # 7. LSTM Approach
     # lstm_model = LSTMBinaryClassifier(embed_dim=embeddings.shape[2], hidden_dim=128)
