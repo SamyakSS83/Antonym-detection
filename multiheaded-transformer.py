@@ -207,7 +207,7 @@ def evaluate_model(model, dataloader, dataset_name=""):
     plt.ylabel('True')
     plt.title(f'Confusion Matrix - {dataset_name}')
     plt.tight_layout()
-    plt.savefig(f'transformer_confusion_matrix_{dataset_name.replace(" ", "_")}.png')
+    plt.savefig(f'assets/transformer_confusion_matrix_{dataset_name.replace(" ", "_")}.png')
     plt.close()
     
     return {
@@ -222,7 +222,7 @@ def train_model(model, train_dataloader, val_dataloader=None, epochs=10, learnin
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     
     best_val_loss = float('inf')
-    patience = 5
+    patience = 50
     patience_counter = 0
     
     train_losses = []
@@ -300,7 +300,7 @@ def train_model(model, train_dataloader, val_dataloader=None, epochs=10, learnin
     plt.legend()
     plt.title('Training and Validation Loss')
     plt.grid(True)
-    plt.savefig('transformer_training_loss.png')
+    plt.savefig('assets/transformer_training_loss.png')
     plt.close()
     
     return train_losses, val_losses
@@ -310,7 +310,7 @@ def main():
     dataset_dir = "dataset"
     word_types = ["adjective-pairs", "noun-pairs", "verb-pairs"]
     batch_size = 64
-    epochs = 15
+    epochs = 200
     
     # Initialize the embedding model
     print("Loading Nomic embedding model...")
