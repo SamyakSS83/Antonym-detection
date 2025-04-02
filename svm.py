@@ -66,7 +66,7 @@ def evaluate_model(model, X_test, y_test, dataset_name=""):
     plt.ylabel('True')
     plt.title(f'Confusion Matrix - {dataset_name}')
     plt.tight_layout()
-    plt.savefig(f'/assets/confusion_matrix_{dataset_name.replace(" ", "_")}.png')
+    plt.savefig(f'assets/confusion_matrix_{dataset_name.replace(" ", "_")}.png')
     plt.close()
     
     return {
@@ -232,7 +232,7 @@ def main():
     plt.xticks(index + bar_width / 2, word_types)
     plt.legend()
     plt.tight_layout()
-    plt.savefig('/assets/model_comparison.png')
+    plt.savefig('assets/model_comparison.png')
     plt.close()
     
     print("Model comparison plot saved as model_comparison.png")
