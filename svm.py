@@ -167,7 +167,17 @@ def main():
     # Save the full model
     joblib.dump(full_svm_clf, "svm_model_full_dataset.pkl")
     print("Full dataset model saved as svm_model_full_dataset.pkl")
-    
+    # Print the equation/activation of the model
+    print("\n=== SVM Model Equation/Activation ===")
+    if hasattr(full_svm_clf, 'dual_coef_') and hasattr(full_svm_clf, 'support_vectors_'):
+        print("Support Vectors:")
+        print(full_svm_clf.support_vectors_)
+        print("\nDual Coefficients:")
+        print(full_svm_clf.dual_coef_)
+        print("\nIntercept:")
+        print(full_svm_clf.intercept_)
+    else:
+        print("The model does not expose the required attributes to print the equation/activation.")
     # Evaluate the full model on each word type's test set for comparison
     print("\n=== Evaluating Full Dataset Model on Test Sets ===")
     full_model_results = {}
