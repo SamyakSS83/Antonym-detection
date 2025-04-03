@@ -146,7 +146,7 @@ def main():
     all_word1, all_word2, all_labels = [], [], []
     
     for word_type in word_types:
-        for split in ["train", "val", "test"]:
+        for split in ["train", "val"]:
             file_path = os.path.join(dataset_dir, f"{word_type}.{split}")
             w1, w2, labels = load_data(file_path)
             all_word1.extend(w1)
