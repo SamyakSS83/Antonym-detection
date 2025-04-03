@@ -152,7 +152,7 @@ def evaluate_model(model, dataset, batch_size=32, dataset_name=""):
     plt.ylabel('True')
     plt.title(f'Confusion Matrix - {dataset_name}')
     plt.tight_layout()
-    plt.savefig(f'graph_confusion_matrix_{dataset_name.replace(" ", "_")}.png')
+    plt.savefig(f'assets/graph_confusion_matrix_{dataset_name.replace(" ", "_")}.png')
     plt.close()
     
     return {
@@ -251,7 +251,7 @@ def train_model(model, train_dataset, val_dataset=None, epochs=10, batch_size=32
     plt.legend()
     plt.title('Training and Validation Loss')
     plt.grid(True)
-    plt.savefig('graph_training_loss.png')
+    plt.savefig('assets/graph_training_loss.png')
     plt.close()
     
     return train_losses, val_losses
@@ -261,7 +261,7 @@ def main():
     dataset_dir = "dataset"
     word_types = ["adjective-pairs", "noun-pairs", "verb-pairs"]
     batch_size = 64
-    epochs = 15
+    epochs = 150
     
     # Initialize the embedding model
     print("Loading Nomic embedding model...")
@@ -298,3 +298,74 @@ def main():
     all_train_val_dataset = create_graph_dataset(X_train_val_word1, X_train_val_word2, all_train_val_labels)
     
     # Split into training and validation sets (90% train, 10% validation)
+    train_size = int(0.9 * len(all_train_val_dataset))
+    val_size = len(all_train_val_dataset) - train_size
+    train_dataset, val_dataset = torch.utils.data.random_split(all_train_val_dataset, [train_size, val_size])
+    
+    print(f"Training dataset size: {len(train_dataset)}")
+    print(f"Validation dataset size: {len(val_dataset)}")
+    
+    # Initialize the model
+    input_dim = X_train_val_word1.shape[1]  # Dimension of word embeddings
+    model = GraphTransformer(input_dim=input_dim).to(device)
+    print(f"Model initialized with input dimension: {input_dim}")
+    
+    # Train the model
+    print("Training model...")
+    train_losses, val_losses = train_model(
+        model=model,
+        train_dataset=train_dataset,
+        val_dataset=val_dataset,
+        epochs=epochs,
+        batch_size=batch_size
+    )
+    
+    # Load the best model for evaluation
+    model.load_state_dict(torch.load("best_graph_model.pt"))
+    
+    # Evaluate on test sets for each word type
+    print("\nEvaluating model on test sets:")
+    results = {}
+    
+    for word_type, (w1_test, w2_test, y_test) in test_data_by_type.items():
+        print(f"\nEvaluating on {word_type} test set")
+        
+        # Generate embeddings for test data
+        X_test_word1, X_test_word2 = embed_word_pairs(w1_test, w2_test, model_st)
+        
+        # Create graph dataset for test data
+        test_dataset = create_graph_dataset(X_test_word1, X_test_word2, y_test)
+        
+        # Evaluate the model
+        results[word_type] = evaluate_model(
+            model=model,
+            dataset=test_dataset,
+            batch_size=batch_size,
+            dataset_name=f"Test - {word_type}"
+        )
+    
+    # Combine all test sets for overall evaluation
+    all_test_word1, all_test_word2, all_test_labels = [], [], []
+    for w1, w2, y in test_data_by_type.values():
+        all_test_word1.extend(w1)
+        all_test_word2.extend(w2)
+        all_test_labels.extend(y)
+    
+    # Generate embeddings for combined test data
+    X_all_test_word1, X_all_test_word2 = embed_word_pairs(all_test_word1, all_test_word2, model_st)
+    
+    # Create graph dataset for combined test data
+    all_test_dataset = create_graph_dataset(X_all_test_word1, X_all_test_word2, all_test_labels)
+    
+    # Evaluate on combined test set
+    results["overall"] = evaluate_model(
+        model=model,
+        dataset=all_test_dataset,
+        batch_size=batch_size,
+        dataset_name="Test - Overall"
+    )
+    
+    print("\nTraining and evaluation complete!")
+
+if __name__ == "__main__":
+    main()

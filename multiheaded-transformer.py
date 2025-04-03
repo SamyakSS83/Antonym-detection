@@ -66,7 +66,7 @@ class MultiHeadAttention(nn.Module):
 
 class TransformerBlock(nn.Module):
     """Transformer block with multi-head attention and feed-forward network"""
-    def __init__(self, embed_dim, num_heads, ff_dim, dropout=0.1):
+    def __init__(self, embed_dim, num_heads, ff_dim, dropout=0.3):  # Increased dropout from 0.1 to 0.3
         super(TransformerBlock, self).__init__()
         self.attention = MultiHeadAttention(embed_dim, num_heads)
         
@@ -96,12 +96,10 @@ class TransformerBlock(nn.Module):
 
 class AntonymTransformer(nn.Module):
     """Transformer model for antonym detection"""
-    def __init__(self, input_dim, num_layers=2, num_heads=4, ff_dim=512, dropout=0.1):
+    def __init__(self, input_dim, num_layers=1, num_heads=2, ff_dim=256, dropout=0.4):  # Reduced complexity & increased dropout
         super(AntonymTransformer, self).__init__()
         
         self.embed_dim = input_dim
-        
-        # Position encoding (not used as we directly feed embeddings)
         
         # Transformer blocks
         self.transformer_blocks = nn.ModuleList(
@@ -111,6 +109,7 @@ class AntonymTransformer(nn.Module):
         # Final classification layers
         self.classifier = nn.Sequential(
             nn.Linear(input_dim * 2, ff_dim),
+            nn.BatchNorm1d(ff_dim),  # Added BatchNorm
             nn.GELU(),
             nn.Dropout(dropout),
             nn.Linear(ff_dim, 1),
@@ -216,13 +215,14 @@ def evaluate_model(model, dataloader, dataset_name=""):
         'confusion_matrix': conf_matrix
     }
 
-def train_model(model, train_dataloader, val_dataloader=None, epochs=10, learning_rate=1e-4):
+def train_model(model, train_dataloader, val_dataloader=None, epochs=10, learning_rate=5e-5):  # Reduced learning rate
     """Train the model."""
     criterion = nn.BCELoss()
-    optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+    optimizer = optim.Adam(model.parameters(), lr=learning_rate, weight_decay=1e-4)  # Added weight decay
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5, verbose=True)  # Added LR scheduler
     
     best_val_loss = float('inf')
-    patience = 50
+    patience = 15  # Reduced patience from 50 to 15
     patience_counter = 0
     
     train_losses = []
@@ -243,6 +243,10 @@ def train_model(model, train_dataloader, val_dataloader=None, epochs=10, learnin
             outputs = model(inputs)
             loss = criterion(outputs, labels)
             loss.backward()
+            
+            # Add gradient clipping
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+            
             optimizer.step()
             
             total_loss += loss.item()
@@ -273,6 +277,9 @@ def train_model(model, train_dataloader, val_dataloader=None, epochs=10, learnin
             
             avg_val_loss = total_val_loss / val_batches
             val_losses.append(avg_val_loss)
+            
+            # Update learning rate scheduler
+            scheduler.step(avg_val_loss)
             
             print(f"Epoch {epoch+1}/{epochs}, Train Loss: {avg_train_loss:.4f}, Val Loss: {avg_val_loss:.4f}")
             
@@ -305,12 +312,107 @@ def train_model(model, train_dataloader, val_dataloader=None, epochs=10, learnin
     
     return train_losses, val_losses
 
+def perform_kfold_cv(X, y, input_dim, k=5, batch_size=32, epochs=200, learning_rate=5e-5):
+    """Perform k-fold cross-validation."""
+    from sklearn.model_selection import KFold
+    
+    print(f"\n=== Performing {k}-fold Cross-Validation ===")
+    
+    # Initialize KFold
+    kfold = KFold(n_splits=k, shuffle=True, random_state=42)
+    
+    # Lists to store metrics
+    fold_val_losses = []
+    fold_val_accuracies = []
+    best_model_state = None
+    best_val_loss = float('inf')
+    
+    # Iterate through folds
+    for fold, (train_indices, val_indices) in enumerate(kfold.split(X)):
+        print(f"\n--- Fold {fold+1}/{k} ---")
+        
+        # Split data
+        X_train_fold = X[train_indices]
+        y_train_fold = y[train_indices]
+        X_val_fold = X[val_indices]
+        y_val_fold = y[val_indices]
+        
+        # Create datasets and dataloaders
+        train_dataset = AntonymDataset(X_train_fold, y_train_fold)
+        val_dataset = AntonymDataset(X_val_fold, y_val_fold)
+        
+        train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+        val_dataloader = DataLoader(val_dataset, batch_size=batch_size)
+        
+        # Initialize model
+        model = AntonymTransformer(input_dim).to(device)
+        
+        # Train model
+        train_losses, val_losses = train_model(
+            model, train_dataloader, val_dataloader, 
+            epochs=epochs, learning_rate=learning_rate
+        )
+        
+        # Evaluate the trained model on validation fold
+        model.eval()
+        all_preds = []
+        all_labels = []
+        total_val_loss = 0
+        val_batches = 0
+        criterion = nn.BCELoss()
+        
+        with torch.no_grad():
+            for inputs, labels in val_dataloader:
+                inputs = inputs.to(device)
+                labels = labels.float().to(device)
+                
+                outputs = model(inputs)
+                loss = criterion(outputs, labels)
+                
+                preds = (outputs >= 0.5).float().cpu().numpy()
+                
+                all_preds.extend(preds)
+                all_labels.extend(labels.cpu().numpy())
+                
+                total_val_loss += loss.item()
+                val_batches += 1
+        
+        fold_val_loss = total_val_loss / val_batches
+        fold_accuracy = accuracy_score(all_labels, all_preds)
+        
+        # Store metrics
+        fold_val_losses.append(fold_val_loss)
+        fold_val_accuracies.append(fold_accuracy)
+        
+        print(f"Fold {fold+1} - Validation Loss: {fold_val_loss:.4f}, Accuracy: {fold_accuracy:.4f}")
+        
+        # Keep the best model
+        if fold_val_loss < best_val_loss:
+            best_val_loss = fold_val_loss
+            best_model_state = model.state_dict().copy()
+    
+    # Print average results
+    avg_val_loss = sum(fold_val_losses) / len(fold_val_losses)
+    avg_val_accuracy = sum(fold_val_accuracies) / len(fold_val_accuracies)
+    
+    print(f"\n=== Cross-Validation Results ===")
+    print(f"Average validation loss: {avg_val_loss:.4f}")
+    print(f"Average validation accuracy: {avg_val_accuracy:.4f}")
+    
+    # Save the best model
+    if best_model_state is not None:
+        torch.save(best_model_state, "best_transformer_model_cv.pt")
+        print("Best model saved to 'best_transformer_model_cv.pt'")
+    
+    return best_model_state, avg_val_loss, avg_val_accuracy
+
 def main():
     # Define paths
     dataset_dir = "dataset"
     word_types = ["adjective-pairs", "noun-pairs", "verb-pairs"]
-    batch_size = 64
+    batch_size = 32  # Reduced batch size from 64 to 32
     epochs = 200
+    k_folds = 5  # Number of folds for cross-validation
     
     # Initialize the embedding model
     print("Loading Nomic embedding model...")
@@ -342,43 +444,18 @@ def main():
     
     # Generate embeddings for training/validation
     X_train_val = embed_word_pairs(all_train_val_word1, all_train_val_word2, model_st)
+    y_train_val = np.array(all_train_val_labels)
     
-    # Split into training and validation sets (90% train, 10% validation)
-    indices = np.random.permutation(len(X_train_val))
-    split_idx = int(0.9 * len(X_train_val))
-    
-    train_indices = indices[:split_idx]
-    val_indices = indices[split_idx:]
-    
-    X_train = X_train_val[train_indices]
-    y_train = np.array(all_train_val_labels)[train_indices]
-    
-    X_val = X_train_val[val_indices]
-    y_val = np.array(all_train_val_labels)[val_indices]
-    
-    print(f"Training data: {len(X_train)} samples")
-    print(f"Validation data: {len(X_val)} samples")
-    
-    # Create datasets and dataloaders
-    train_dataset = AntonymDataset(X_train, y_train)
-    train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-    
-    val_dataset = AntonymDataset(X_val, y_val)
-    val_dataloader = DataLoader(val_dataset, batch_size=batch_size)
-    
-    # Initialize model
-    input_dim = X_train.shape[2]  # Embedding dimension
-    model = AntonymTransformer(input_dim).to(device)
-    print(f"Model created with input dimension: {input_dim}")
-    
-    # Train model
-    print("\n=== Training Transformer Model on Combined Data ===")
-    train_losses, val_losses = train_model(
-        model, train_dataloader, val_dataloader, epochs=epochs
+    # Perform k-fold cross-validation
+    input_dim = X_train_val.shape[2]  # Embedding dimension
+    best_model_state, _, _ = perform_kfold_cv(
+        X_train_val, y_train_val, input_dim,
+        k=k_folds, batch_size=batch_size, epochs=epochs
     )
     
-    # Load best model for evaluation
-    model.load_state_dict(torch.load("best_transformer_model.pt"))
+    # Initialize model with the best weights from cross-validation
+    model = AntonymTransformer(input_dim).to(device)
+    model.load_state_dict(torch.load("best_transformer_model_cv.pt"))
     
     # Evaluate model on each domain's test set
     print("\n=== Evaluating Transformer Model on Test Sets by Domain ===")
