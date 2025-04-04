@@ -129,7 +129,7 @@ def main():
     optimizer = AdamW(model.parameters(), lr=2e-5)
 
     # Training loop
-    num_epochs = 3
+    num_epochs = 12
     best_val_accuracy = 0
     os.makedirs("assets", exist_ok=True)
     
