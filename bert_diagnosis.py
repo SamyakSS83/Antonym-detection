@@ -1,7 +1,7 @@
 import pandas as pd
 import torch
 from torch.utils.data import Dataset, DataLoader
-from transformers import BertTokenizer, BertForSequenceClassification, BertModel
+from transformers import BertTokenizer, BertForSequenceClassification, BertModel, AutoTokenizer
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
 import numpy as np
 import os
@@ -704,7 +704,8 @@ def main():
     print(f"Test data: {len(test_data)} samples")
     
     # Initialize tokenizer
-    tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
+    model_name = "bert-base-uncased"
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
     
     # Create test dataset and dataloader
     test_dataset = WordPairDataset(test_data, tokenizer)

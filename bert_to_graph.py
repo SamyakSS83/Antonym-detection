@@ -3,7 +3,7 @@ import torch
 import pandas as pd
 import numpy as np
 from torch.utils.data import Dataset
-from transformers import BertTokenizer, BertForSequenceClassification
+from transformers import BertTokenizer, BertForSequenceClassification, AutoTokenizer, AutoModelForSequenceClassification
 import torch.nn as nn
 import torch.nn.functional as F
 from torch_geometric.data import Data as GraphData
@@ -27,12 +27,11 @@ print(f"Using device: {device}")
 # Load Fine-Tuned BERT for Embeddings
 # -----------------------
 # Update this path to point to your fine-tuned BERT model checkpoint directory.
-finetuned_bert_path = "good_models/bert/best_bert_model.pt"  # <-- CHANGE THIS PATH as needed
+finetuned_bert_path = "/kaggle/working/assets/best_bert_model.pt"  # <-- CHANGE THIS PATH as needed
 
-tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
-
-# Load base model first, then load your saved weights
-ft_model = BertForSequenceClassification.from_pretrained("bert-base-uncased")
+model_name = "bert-base-uncased"
+tokenizer = AutoTokenizer.from_pretrained(model_name)
+ft_model = AutoModelForSequenceClassification.from_pretrained(model_name)
 ft_model.load_state_dict(torch.load(finetuned_bert_path, map_location=device))
 # Extract the underlying BERT encoder for embeddings
 finetuned_bert = ft_model.bert.to(device)
@@ -118,7 +117,7 @@ class GraphTransformerClassifier(nn.Module):
 # Load Dataset from /kaggle/input/dataset
 # -----------------------
 
-data_dir = "./dataset"
+data_dir = "/kaggle/input/dataset"
 word_types = ["adjective-pairs", "noun-pairs", "verb-pairs"]
 
 train_df = pd.DataFrame()

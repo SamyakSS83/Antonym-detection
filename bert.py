@@ -70,7 +70,7 @@ class WordPairDataset(Dataset):
 
 def main():
     # Path to data directory
-    dataset_dir = "dataset"
+    dataset_dir = "/kaggle/input/dataset"
     word_types = ["adjective-pairs", "noun-pairs", "verb-pairs"]
     
     # Load and combine datasets
