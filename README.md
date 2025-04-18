@@ -1,1 +1,14 @@
-To Do: Please create and push a new model that uses the same SVM logic and uses the dataset folder i have made
+Good files:
+
+
+bert_to_graph
+
+dualenc_frombert
+
+bertdualenc_diagnosis
+
+diagnosis_gnn
+
+multiscale_bert_graph
+
+bert_graph_contrastive_learning
