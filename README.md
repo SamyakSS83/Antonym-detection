@@ -6,7 +6,8 @@ This repository contains implementations of various models for antonym detection
 
 - [`test_implementations/`](./test_implementations/): Contains experimental implementations
     - `icenet.py`: Implementation of ICE-NET, a graph-based model for antonym detection
-    - `ICE-NET.py`: Alternative implementation with slight variations
+    - `ICE-NET.py`: Faithful implementation 
+    
 
 - [`other_graphs/`](./other_graphs/): Contains four graph-based models:
     - **Graph Attention Network (GAT)**: Uses attention mechanisms to weigh neighbor features
@@ -21,7 +22,6 @@ This repository contains implementations of various models for antonym detection
 - `dual_enc.py`: Dual encoder model with graph transformers
 - Various diagnosis and evaluation files
 
-## Model Descriptions
 
 ### ICE-NET (`test_implementations`)
 ICE-NET is a graph-based model for antonym detection with three key components:
@@ -31,6 +31,7 @@ ICE-NET is a graph-based model for antonym detection with three key components:
 3. **ENC-3**: Graph-based Transitivity Encoder - uses graph convolution for capturing transitive relations
 
 The model constructs separate graphs for head and tail words and applies graph convolutions to capture higher-order relationships between word pairs.
+
 
 ## Dual Encoder Graph Model
 This is the main recommended approach that combines BERT embeddings with graph-based learning.
