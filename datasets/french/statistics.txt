@@ -1,9 +1,0 @@
-Language: french
-Total unique pairs: 571
-Train pairs: 399
-Val pairs: 85
-Test pairs: 87
-WordNet pairs: 571
-ConceptNet pairs: 0
-Sources: Fallback WordNet XML + ConceptNet
-Generated: 2025-07-19 02:19:51

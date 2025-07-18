@@ -1,9 +1,0 @@
-Language: german
-Total unique pairs: 2678
-Train pairs: 1874
-Val pairs: 401
-Test pairs: 403
-WordNet pairs: 0
-ConceptNet pairs: 2678
-Sources: Fallback WordNet XML + ConceptNet
-Generated: 2025-07-19 02:19:47
