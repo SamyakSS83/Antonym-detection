@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 # Create assets directory if it doesn't exist
-os.makedirs("assets", exist_ok=True)
+os.makedirs("../assets", exist_ok=True)
 
 # -----------------------
 # Device Configuration
@@ -27,7 +27,7 @@ print(f"Using device: {device}")
 # Load Fine-Tuned BERT for Embeddings
 # -----------------------
 # Update this path to point to your fine-tuned BERT model checkpoint directory.
-finetuned_bert_path = "output/kaggle/working/assets/best_bert_model.pt" # <-- CHANGE THIS PATH as needed
+finetuned_bert_path = "../assets/best_bert_model.pt" # <-- CHANGE THIS PATH as needed
 model_name = "bert-base-uncased"
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 ft_model = AutoModelForSequenceClassification.from_pretrained(model_name)
@@ -199,7 +199,7 @@ def plot_confusion(cm, title, save_path):
 # Load Dataset
 # -----------------------
 def main():
-    data_dir = "/kaggle/input/dataset"
+    data_dir = "../dataset"
     word_types = ["adjective-pairs", "noun-pairs", "verb-pairs"]
     train_df = pd.DataFrame()
     val_df = pd.DataFrame()
@@ -219,6 +219,24 @@ def main():
 
     # Combine training and validation sets for training
     train_df = pd.concat([train_df, val_df], ignore_index=True)
+    
+    # Check if we have any data
+    if len(train_df) == 0:
+        print("Error: No training data found. Please check if the dataset files exist in the correct directory.")
+        print(f"Looking for files in: {os.path.abspath(data_dir)}")
+        for wt in word_types:
+            train_file = os.path.join(data_dir, f"{wt}.train")
+            val_file = os.path.join(data_dir, f"{wt}.val")
+            test_file = os.path.join(data_dir, f"{wt}.test")
+            print(f"  {train_file}: {'EXISTS' if os.path.exists(train_file) else 'NOT FOUND'}")
+            print(f"  {val_file}: {'EXISTS' if os.path.exists(val_file) else 'NOT FOUND'}")
+            print(f"  {test_file}: {'EXISTS' if os.path.exists(test_file) else 'NOT FOUND'}")
+        return
+    
+    print(f"Training data: {len(train_df)} samples")
+    if test_sets:
+        total_test = sum(len(df) for df in test_sets.values())
+        print(f"Test data: {total_test} samples across {len(test_sets)} word types")
 
     # -----------------------
     # Create Datasets and DataLoaders
@@ -248,7 +266,7 @@ def main():
     # Training Loop
     # -----------------------
     num_epochs = 10
-    best_model_path = "assets/best_dual_encoder_graph_model.pt"
+    best_model_path = "../assets/best_dual_encoder_graph_model.pt"
     best_acc = 0.0
     lambda_margin = 0.5  # Weight for margin loss
 
@@ -301,7 +319,7 @@ def main():
             print("Saved new best model.")
             
             cm = confusion_matrix(all_labels, all_preds)
-            plot_confusion(cm, 'Combined Test Confusion Matrix', os.path.join('assets', 'combined_confusion_matrix.png'))
+            plot_confusion(cm, 'Combined Test Confusion Matrix', os.path.join('../assets', 'combined_confusion_matrix.png'))
 
     # -----------------------
     # Evaluation on Each Word Type
@@ -327,7 +345,7 @@ def main():
         print(classification_report(all_labels, all_preds, target_names=["Not Antonym", "Antonym"]))
         
         cm = confusion_matrix(all_labels, all_preds)
-        plot_confusion(cm, f"{wt} Confusion Matrix", os.path.join("assets", f"{wt}_confusion_matrix.png"))
+        plot_confusion(cm, f"{wt} Confusion Matrix", os.path.join("../assets", f"{wt}_confusion_matrix.png"))
 
 if __name__ == "__main__":
     main()

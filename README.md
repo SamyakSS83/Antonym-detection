@@ -154,18 +154,19 @@ where:
 - PyTorch Geometric
 - Transformers library
 - Sentence-Transformers
+- Torch Scatter
 
 ### Training Process
 1. First, train the base BERT model:
 ```bash
-python dual_enc/bert.py
-python dual_enc/bert.py
+cd dual_enc
+python3 bert.py
 ```
 This will train the foundational BERT model and save embeddings for the next step.
 
 2. Then, run the dual encoder model:
 ```bash
-python dual_enc/dualenc_frombert.py
+python3 dualenc_frombert.py
 ```
 This will load the pre-trained BERT embeddings and train the dual encoder graph model.
 

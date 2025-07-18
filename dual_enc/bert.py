@@ -70,7 +70,7 @@ class WordPairDataset(Dataset):
 
 def main():
     # Path to data directory
-    dataset_dir = "/kaggle/input/dataset"
+    dataset_dir = "../dataset"
     word_types = ["adjective-pairs", "noun-pairs", "verb-pairs"]
     
     # Load and combine datasets
@@ -93,6 +93,19 @@ def main():
     print(f"Training data: {len(train_data)} samples")
     print(f"Validation data: {len(val_data)} samples")
     print(f"Test data: {len(test_data)} samples")
+
+    # Check if we have any data
+    if len(train_data) == 0 or len(val_data) == 0 or len(test_data) == 0:
+        print("Error: No data found. Please check if the dataset files exist in the correct directory.")
+        print(f"Looking for files in: {os.path.abspath(dataset_dir)}")
+        for word_type in word_types:
+            train_file = os.path.join(dataset_dir, f"{word_type}.train")
+            val_file = os.path.join(dataset_dir, f"{word_type}.val")
+            test_file = os.path.join(dataset_dir, f"{word_type}.test")
+            print(f"  {train_file}: {'EXISTS' if os.path.exists(train_file) else 'NOT FOUND'}")
+            print(f"  {val_file}: {'EXISTS' if os.path.exists(val_file) else 'NOT FOUND'}")
+            print(f"  {test_file}: {'EXISTS' if os.path.exists(test_file) else 'NOT FOUND'}")
+        return
 
     # Check for NaN values
     print("Checking for NaN values in datasets...")
@@ -131,7 +144,7 @@ def main():
     # Training loop
     num_epochs = 12
     best_val_accuracy = 0
-    os.makedirs("assets", exist_ok=True)
+    os.makedirs("../assets", exist_ok=True)
     
     print(f"Starting training for {num_epochs} epochs...")
     for epoch in range(num_epochs):
@@ -190,12 +203,12 @@ def main():
         # Save the best model
         if val_accuracy > best_val_accuracy:
             best_val_accuracy = val_accuracy
-            torch.save(model.state_dict(), "assets/best_bert_model.pt")
+            torch.save(model.state_dict(), "../assets/best_bert_model.pt")
             print(f"Saved new best model with validation accuracy: {val_accuracy:.4f}")
 
     # Load the best model for testing
     print("\nLoading best model for evaluation...")
-    model.load_state_dict(torch.load("assets/best_bert_model.pt"))
+    model.load_state_dict(torch.load("../assets/best_bert_model.pt"))
 
     # Test the model
     model.eval()
