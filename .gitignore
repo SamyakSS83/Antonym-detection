@@ -9,3 +9,4 @@ svm
 *.zip
 datasets/
 bert/
+trained/
