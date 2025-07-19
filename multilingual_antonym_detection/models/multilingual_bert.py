@@ -13,6 +13,9 @@ import os
 import argparse
 import yaml
 from tqdm import tqdm
+# Set matplotlib backend before importing pyplot to avoid segfaults
+import matplotlib
+matplotlib.use('Agg')  # Non-interactive backend
 import matplotlib.pyplot as plt
 import seaborn as sns
 import logging
@@ -248,11 +251,20 @@ class MultilingualBertTrainer:
         
         # Calculate metrics
         accuracy = accuracy_score(all_labels, all_preds)
-        report = classification_report(
-            all_labels, 
-            all_preds, 
-            target_names=['Not Antonym', 'Antonym']
-        )
+        
+        # Handle single-class prediction issue
+        unique_labels = set(all_labels)
+        unique_preds = set(all_preds)
+        
+        if len(unique_labels) == 1 or len(unique_preds) == 1:
+            logger.warning(f"Single-class prediction detected. Labels: {unique_labels}, Predictions: {unique_preds}")
+            report = f"Accuracy: {accuracy:.4f}\nNote: Only one class present in predictions or labels"
+        else:
+            report = classification_report(
+                all_labels, 
+                all_preds, 
+                target_names=['Not Antonym', 'Antonym']
+            )
         
         logger.info(f"Test Accuracy for {self.language}: {accuracy:.4f}")
         logger.info(f"Classification Report:\n{report}")
@@ -264,32 +276,61 @@ class MultilingualBertTrainer:
             'classification_report': report
         }
         
-        # Plot confusion matrix
-        cm = confusion_matrix(all_labels, all_preds)
-        self._plot_confusion_matrix(cm, f'{self.language.title()} BERT Confusion Matrix')
+        # Plot confusion matrix with error handling
+        try:
+            cm = confusion_matrix(all_labels, all_preds)
+            # Skip plotting to avoid segfaults - just log the confusion matrix
+            logger.info(f"Confusion Matrix for {self.language}:")
+            logger.info(f"\n{cm}")
+            # Optionally save as text file instead
+            cm_file = self.output_dir / f'{self.language}_confusion_matrix.txt'
+            with open(cm_file, 'w') as f:
+                f.write(f"Confusion Matrix for {self.language}:\n")
+                f.write(f"{cm}\n")
+                f.write(f"Classes: ['Not Antonym', 'Antonym']\n")
+            logger.info(f"Saved confusion matrix data to {cm_file}")
+        except Exception as plot_error:
+            logger.warning(f"Failed to create confusion matrix: {plot_error}")
         
         return results
     
     def _plot_confusion_matrix(self, cm, title):
         """Plot and save confusion matrix."""
-        plt.figure(figsize=(8, 6))
-        sns.heatmap(
-            cm, 
-            annot=True, 
-            fmt="d", 
-            cmap="Blues", 
-            xticklabels=["Not Antonym", "Antonym"], 
-            yticklabels=["Not Antonym", "Antonym"]
-        )
-        plt.title(title)
-        plt.xlabel("Predicted Label")
-        plt.ylabel("True Label")
-        plt.tight_layout()
-        
-        save_path = self.output_dir / f'{self.language}_bert_confusion_matrix.png'
-        plt.savefig(save_path)
-        plt.close()
-        logger.info(f"Saved confusion matrix to {save_path}")
+        try:
+            # Set backend explicitly for this operation
+            plt.ioff()  # Turn off interactive mode
+            fig, ax = plt.subplots(figsize=(8, 6))
+            
+            sns.heatmap(
+                cm, 
+                annot=True, 
+                fmt="d", 
+                cmap="Blues", 
+                xticklabels=["Not Antonym", "Antonym"], 
+                yticklabels=["Not Antonym", "Antonym"],
+                ax=ax
+            )
+            ax.set_title(title)
+            ax.set_xlabel("Predicted Label")
+            ax.set_ylabel("True Label")
+            
+            save_path = self.output_dir / f'{self.language}_bert_confusion_matrix.png'
+            fig.savefig(save_path, dpi=100, bbox_inches='tight')
+            logger.info(f"Saved confusion matrix to {save_path}")
+            
+        except Exception as e:
+            logger.warning(f"Failed to create confusion matrix plot: {e}")
+        finally:
+            # Comprehensive cleanup to prevent segfaults
+            try:
+                plt.close('all')
+                plt.clf()
+                plt.cla()
+                # Force garbage collection
+                import gc
+                gc.collect()
+            except Exception as cleanup_error:
+                logger.warning(f"Error during plot cleanup: {cleanup_error}")
 
 def load_config(config_path):
     """Load configuration from YAML file."""

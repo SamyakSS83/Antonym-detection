@@ -11,6 +11,9 @@ from torch_geometric.data import DataLoader as GeoDataLoader
 from torch_geometric.nn import TransformerConv, global_mean_pool
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
 from tqdm import tqdm
+# Set matplotlib backend before importing pyplot to avoid segfaults
+import matplotlib
+matplotlib.use('Agg')  # Non-interactive backend
 import matplotlib.pyplot as plt
 import seaborn as sns
 import argparse
@@ -149,15 +152,22 @@ class MultilingualDualEncoderTrainer:
         self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
         
         # Load fine-tuned BERT if available
-        bert_model_path = self.output_dir / f'best_{language}_bert_model.pt'
-        if bert_model_path.exists():
-            logger.info(f"Loading fine-tuned BERT from {bert_model_path}")
-            ft_model = AutoModelForSequenceClassification.from_pretrained(self.model_name)
-            ft_model.load_state_dict(torch.load(bert_model_path, map_location=self.device))
-            self.bert_model = ft_model.bert.to(self.device)
+        if 'trained_bert_path' in self.lang_config:
+            trained_bert_path = Path(self.lang_config['trained_bert_path'])
+            if trained_bert_path.exists():
+                logger.info(f"Loading fine-tuned BERT from {trained_bert_path}")
+                ft_model = AutoModelForSequenceClassification.from_pretrained(self.model_name, num_labels=2)
+                ft_model.load_state_dict(torch.load(trained_bert_path, map_location=self.device))
+                self.bert_model = ft_model.bert.to(self.device)
+                logger.info("✓ Successfully loaded fine-tuned BERT model")
+            else:
+                logger.warning(f"Fine-tuned BERT path not found: {trained_bert_path}")
+                logger.info("Using pre-trained BERT (not fine-tuned)")
+                ft_model = AutoModelForSequenceClassification.from_pretrained(self.model_name, num_labels=2)
+                self.bert_model = ft_model.bert.to(self.device)
         else:
             logger.info("Using pre-trained BERT (not fine-tuned)")
-            ft_model = AutoModelForSequenceClassification.from_pretrained(self.model_name)
+            ft_model = AutoModelForSequenceClassification.from_pretrained(self.model_name, num_labels=2)
             self.bert_model = ft_model.bert.to(self.device)
         
         self.bert_model.eval()
@@ -261,7 +271,7 @@ class MultilingualDualEncoderTrainer:
             return torch.tensor(0.0, device=self.device)
     
     def train(self, train_loader, test_loader):
-        """Train the dual encoder model."""
+        """Train the dual encoder model with early stopping."""
         num_epochs = self.training_config['num_epochs']
         learning_rate = self.training_config['learning_rate']
         margin_weight = self.training_config['margin_weight']
@@ -272,7 +282,11 @@ class MultilingualDualEncoderTrainer:
         best_acc = 0.0
         best_model_path = self.output_dir / f'best_{self.language}_dual_encoder_model.pt'
         
-        logger.info(f"Starting dual encoder training for {num_epochs} epochs...")
+        # Early stopping parameters
+        patience = 5
+        no_improvement_count = 0
+        
+        logger.info(f"Starting dual encoder training for {num_epochs} epochs with early stopping (patience={patience})...")
         
         for epoch in range(num_epochs):
             self.model.train()
@@ -315,11 +329,19 @@ class MultilingualDualEncoderTrainer:
                 f"Test Accuracy: {test_acc:.4f}"
             )
             
-            # Save best model
+            # Save best model and check for early stopping
             if test_acc > best_acc:
                 best_acc = test_acc
                 torch.save(self.model.state_dict(), best_model_path)
                 logger.info(f"Saved new best model with test accuracy: {test_acc:.4f}")
+                no_improvement_count = 0
+            else:
+                no_improvement_count += 1
+                logger.info(f"No improvement for {no_improvement_count} epochs")
+                
+                if no_improvement_count >= patience:
+                    logger.info(f"Early stopping triggered after {epoch+1} epochs")
+                    break
         
         return best_model_path
     
@@ -370,12 +392,18 @@ class MultilingualDualEncoderTrainer:
         logger.info(f"Dual Encoder Test Accuracy for {self.language}: {accuracy:.4f}")
         logger.info(f"Classification Report:\n{report}")
         
-        # Plot confusion matrix
+        # Save confusion matrix as text to avoid plotting issues
         cm = confusion_matrix(all_labels, all_preds)
-        self._plot_confusion_matrix(
-            cm, 
-            f'{self.language.title()} Dual Encoder Confusion Matrix'
-        )
+        logger.info(f"Confusion Matrix for {self.language} Dual Encoder:")
+        logger.info(f"\n{cm}")
+        
+        # Save as text file instead of plot
+        cm_file = self.output_dir / f'{self.language}_dual_encoder_confusion_matrix.txt'
+        with open(cm_file, 'w') as f:
+            f.write(f"Dual Encoder Confusion Matrix for {self.language}:\n")
+            f.write(f"{cm}\n")
+            f.write(f"Classes: ['Not Antonym', 'Antonym']\n")
+        logger.info(f"Saved confusion matrix data to {cm_file}")
         
         return {
             'language': self.language,
