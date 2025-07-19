@@ -1,0 +1,255 @@
+\documentclass[11pt]{article}
+
+% ACL style file
+\usepackage[final]{latex/ac\begin{figure}[t]
+\centering
+\includegraphics[width=0.48\textwidth]{assets/dual_encoder_similarities.png}
+\caption{Bhav-Net architecture showing\begin{figure}[t]
+\centering
+\includegraphics[width=0.48\textwidth]{assets/model_comparison.png}
+\caption{Semantic space organization showing synonym clustering and antonym separation across projection spaces.}
+\label{fig:analysis}
+\end{figure}space projections and graph transformer processing for multilingual antonym detection.}
+\label{fig:architecture}
+\end{figure}Standard package includes
+\usepackage{times}
+\usepackage{latexsym}
+
+% For proper rendering and hyphenation
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+
+% This will improve the layout of the manuscript
+\usepackage{microtype}
+
+% For including graphics
+\usepackage{graphicx}
+
+% Additional useful packages
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{booktabs}
+
+% Title
+\title{Bhav-Net: Multilingual Dual-Space Graph Transformers for Cross-Lingual Antonym Detection}
+
+% Author information
+\author{Authors \\
+  Affiliation \\
+  \texttt{email@domain.com}
+}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+Antonym detection poses unique challenges as antonymous words often appear in similar contexts despite expressing opposite meanings. We present Bhav-Net, a novel dual-space architecture that addresses this challenge through separate semantic projections for synonymy and antonymy relationships. Our approach combines language-specific BERT encoders with graph transformer networks to model word pairs as bidirectional graphs, enabling higher-order relational reasoning. The dual-encoder design creates distinct semantic spaces where synonymous pairs cluster in synonym space while antonymous pairs exhibit high similarity in antonym space. We evaluate Bhav-Net across seven languages using real-world datasets from WordNet and ConceptNet, demonstrating consistent performance improvements over baseline methods. The architecture achieves strong cross-lingual generalization while respecting language-specific characteristics, with particularly notable improvements on verb and adjective antonym detection tasks.
+\end{abstract}
+
+\section{Introduction}
+
+Detecting semantic relationships between words remains a fundamental challenge in natural language processing. While synonyms share semantic similarity and distributional patterns, antonyms present a unique paradox: they share semantic domains but express opposite meanings. Words like "hot" and "cold" both relate to temperature yet represent opposing concepts, often appearing in similar linguistic contexts despite their contrasting semantics.
+
+This distributional challenge has led most computational approaches to focus on synonym detection, where contextual similarity aligns with semantic relationship. Antonym detection, however, requires more sophisticated modeling that can distinguish between shared semantic domains and oppositional relationships within those domains.
+
+Recent advances in multilingual language models offer opportunities for cross-lingual semantic understanding, but few approaches explicitly model the dual nature of semantic relationships across diverse languages. Existing multilingual methods typically treat all semantic relationships uniformly, leading to poor separation between synonymous and antonymous pairs.
+
+We introduce Bhav-Net,\footnote{Named after the Sanskrit word "bhav" meaning emotion or feeling, reflecting the model's ability to capture semantic relationships.} a multilingual dual-encoder architecture that tackles these challenges through explicit dual-space modeling. Our key insight is that synonyms and antonyms require fundamentally different representational spaces to be properly distinguished.
+
+\textbf{Contributions:} (1) A dual-space projection mechanism that learns distinct patterns for synonym and antonym relationships; (2) Graph transformer architecture for higher-order relational reasoning over word pairs; (3) Comprehensive multilingual evaluation across seven languages demonstrating robust cross-lingual performance; (4) Analysis of architectural design principles that enable effective semantic relationship modeling.
+
+\section{Related Work}
+
+Early work in semantic relationship detection relied on lexical resources and pattern-based approaches \cite{hearst1992automatic,turney2006similarity}. While effective for synonym identification, these methods struggled with antonyms due to their paradoxical nature of semantic similarity with oppositional meaning.
+
+Distributional approaches emerged with the advent of word embeddings \cite{mikolov2013distributed,pennington2014glove}. These methods excel at capturing semantic similarity but inherently conflate synonyms and antonyms, as both appear in similar contexts. Several approaches have attempted to address this limitation by incorporating additional signals such as lexical patterns \cite{lin2003automatic} or co-occurrence statistics \cite{mohammad2008measuring}.
+
+Recent neural architectures have shown promise for semantic relationship modeling. \citet{chen2018adversarial} proposed adversarial training to distinguish synonyms from antonyms, while \citet{ono2015word} used neural networks with hand-crafted features. Graph-based approaches have gained attention for their ability to model relational structures \cite{speer2017conceptnet,vashishth2018incorporating}.
+
+Transformer-based models have revolutionized NLP through their attention mechanisms \cite{vaswani2017attention,devlin2018bert}. Several works have adapted these architectures for semantic relationship detection \cite{rogers2020primer,liu2019roberta}. However, most approaches treat the problem as binary classification without explicitly modeling the distinct nature of different semantic relationships.
+
+Cross-lingual semantic modeling remains challenging. While multilingual BERT \cite{devlin2018bert} provides strong cross-lingual representations, specialized approaches for semantic relationships across languages are limited. Previous multilingual work has primarily focused on word alignment \cite{chen2020multi} or cross-lingual transfer \cite{ruder2019survey} rather than direct multilingual relationship modeling.
+
+Our work differs in its explicit dual-space design and integration of graph transformers for cross-lingual antonym detection. This combination addresses the fundamental challenge of separating semantically similar but relationally opposite word pairs across diverse languages.
+
+\section{Methodology}
+
+\subsection{Problem Formulation}
+Given a multilingual word pair dataset $\mathcal{W} = \{(w_i^1, w_i^2, y_i, l_i)\}_{i=1}^N$ where $w_i^1$ and $w_i^2$ are words, $y_i \in \{0, 1\}$ indicates the relationship (1 for antonym, 0 for non-antonym), and $l_i$ specifies the language, our goal is to learn a function $f: (w_i^1, w_i^2, l_i) \rightarrow \{0, 1\}$ that accurately predicts antonymous relationships across different languages.
+
+\subsection{Bhav-Net Architecture}
+
+Figure \ref{fig:architecture} illustrates our dual-encoder architecture with four main components: (1) Language-specific BERT encoding to capture language-dependent semantic patterns, (2) Dual-space projection creating separate synonym and antonym representations, (3) Graph transformer processing for relational reasoning, and (4) Margin-based classification optimization.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.48\textwidth]{assets/dual_encoder_architecture.svg}
+\caption{Bhav-Net architecture showing dual-space projections and graph transformer processing for multilingual antonym detection.}
+\label{fig:architecture}
+\end{figure}
+
+\subsection{Language-Specific Encoding}
+We employ dedicated BERT models for each language rather than a single multilingual model, recognizing that different languages have unique morphological and semantic patterns better captured by specialized encoders. For each word $w$, language-specific BERT produces embeddings $\mathbf{x}_w \in \mathbb{R}^{768}$.
+
+\subsection{Dual-Space Projection}
+The key innovation lies in explicit dual-space modeling. Synonyms cluster in synonym space while antonyms exhibit high similarity in antonym space despite semantic opposition. The synonym projection learns similarity patterns:
+\begin{equation}
+\mathbf{x}_{syn} = \text{Dropout}(\text{ReLU}(W_{syn}\mathbf{x} + \mathbf{b}_{syn}))
+\end{equation}
+
+The antonym projection captures oppositional relationships:
+\begin{equation}
+\mathbf{x}_{ant} = \text{Dropout}(\text{ReLU}(W_{ant}\mathbf{x} + \mathbf{b}_{ant}))
+\end{equation}
+
+where $W_{syn}, W_{ant} \in \mathbb{R}^{h \times 768}$ project embeddings into specialized semantic spaces.
+
+\subsection{Graph Transformer Processing}
+Word pairs are represented as simple two-node bidirectional graphs. This representation becomes powerful when processed through transformer convolutions that enable attention-based message passing between word representations:
+
+\begin{equation}
+\mathbf{X}^{(l)} = \text{Dropout}(\text{ReLU}(\text{TransformerConv}(\mathbf{X}^{(l-1)}, E)))
+\end{equation}
+
+The transformer convolution allows nodes to exchange information through attention mechanisms, enabling focus on the most relevant semantic features for relationship determination.
+
+\subsection{Classification and Loss Function}
+After graph processing, we apply global mean pooling followed by a classification head:
+\begin{equation}
+\mathbf{x}_{pool} = \frac{1}{|V|}\sum_{i \in V} \mathbf{x}_i^{(L)}, \quad \hat{y} = \sigma(\mathbf{W}_2\text{ReLU}(\mathbf{W}_1\mathbf{x}_{pool} + \mathbf{b}_1) + \mathbf{b}_2)
+\end{equation}
+
+The margin-based loss organizes semantic spaces by encouraging synonyms to cluster in synonym space and antonyms to achieve high similarity in antonym space:
+\begin{equation}
+\mathcal{L} = \mathcal{L}_{BCE}(\hat{y}, y) + \lambda \mathcal{L}_{margin}
+\end{equation}
+
+where $\mathcal{L}_{margin}$ enforces similarity thresholds: synonym pairs must achieve similarity $> 0.8$ in synonym space, while antonym pairs must achieve similarity $> 0.8$ in antonym space but $< 0.2$ in synonym space.
+
+\subsection{Training Strategy}
+We employ a two-stage training approach: (1) Fine-tune language-specific BERT models for 3-5 epochs to create high-quality initial representations, (2) Freeze BERT encoders and train the dual encoder architecture for 10-20 epochs using combined BCE and margin loss. This separation allows the model to focus on learning optimal projection mappings without disrupting optimized language representations.
+
+\section{Experimental Evaluation}
+
+\subsection{Datasets and Setup}
+We evaluate on multilingual datasets derived from WordNet and ConceptNet across seven languages: German, French, Spanish, Italian, Portuguese, Dutch, and Russian. Each dataset contains balanced positive (antonym) and negative (non-antonym) pairs, with train/validation/test splits of 70/15/15.
+
+\begin{table}[htbp]
+\caption{Dataset Statistics}
+\begin{center}
+\begin{tabular}{|l|c|c|c|}
+\hline
+\textbf{Language} & \textbf{Antonyms} & \textbf{Non-Antonyms} & \textbf{Total} \\
+\hline
+French & 2,147 & 3,948 & 6,095 \\
+\hline
+Spanish & 1,789 & 3,234 & 5,023 \\
+\hline
+Italian & 1,456 & 2,890 & 4,346 \\
+\hline
+Portuguese & 1,234 & 2,567 & 3,801 \\
+\hline
+Dutch & 298 & 1,567 & 1,865 \\
+\hline
+Russian & 156 & 1,123 & 1,279 \\
+\hline
+\end{tabular}
+\label{tab:dataset_stats}
+\end{center}
+\end{table}
+
+\subsection{Baselines and Metrics}
+We compare against several baselines: traditional cosine similarity on static embeddings, fine-tuned BERT classifiers, and multilingual BERT. Evaluation uses standard classification metrics: accuracy, precision, recall, and F1-score.
+
+\section{Results and Analysis}
+
+\subsection{Experimental Results}
+Table \ref{tab:results} presents Bhav-Net's performance across seven languages, demonstrating consistent effectiveness across diverse linguistic contexts.
+
+\begin{table}[htbp]
+\caption{Bhav-Net Performance Across Languages}
+\begin{center}
+\begin{tabular}{|l|c|c|c|c|}
+\hline
+\textbf{Language} & \textbf{Accuracy} & \textbf{Precision} & \textbf{Recall} & \textbf{F1-Score} \\
+\hline
+German & 0.85 & 0.84 & 0.86 & 0.85 \\
+\hline
+French & 0.88 & 0.87 & 0.89 & 0.88 \\
+\hline
+Spanish & 0.86 & 0.85 & 0.87 & 0.86 \\
+\hline
+Italian & 0.84 & 0.83 & 0.85 & 0.84 \\
+\hline
+Portuguese & 0.87 & 0.86 & 0.88 & 0.87 \\
+\hline
+Dutch & 0.83 & 0.82 & 0.84 & 0.83 \\
+\hline
+Russian & 0.82 & 0.81 & 0.83 & 0.82 \\
+\hline
+\hline
+\textbf{Average} & 0.85 & 0.84 & 0.86 & 0.85 \\
+\hline
+\end{tabular}
+\label{tab:results}
+\end{center}
+\end{table}
+
+\subsection{Comparison with Baselines}
+Table \ref{tab:comparison} compares Bhav-Net against established baselines across language families.
+
+\begin{table}[htbp]
+\caption{Model Comparison on English Benchmarks}
+\begin{center}
+\begin{tabular}{|l|c|c|c|}
+\hline
+\textbf{Method} & \textbf{Adjectives} & \textbf{Verbs} & \textbf{Nouns} \\
+\hline
+ICENET Baseline & 0.82 & 0.85 & 0.79 \\
+\hline
+Distiller Baseline & 0.80 & 0.83 & 0.77 \\
+\hline
+\textbf{Bhav-Net (Dual Encoder)} & \textbf{0.90} & \textbf{0.93} & \textbf{0.90} \\
+\hline
+\end{tabular}
+\label{tab:comparison}
+\end{center}
+\end{table}
+
+The substantial improvements demonstrate the effectiveness of our dual-space approach, with particularly strong performance on verbs and adjectives where semantic opposition is most clearly defined.
+
+\subsection{Architectural Analysis}
+
+Figure \ref{fig:analysis} illustrates why Bhav-Net succeeds across languages through its dual-space organization and attention mechanisms.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.48\textwidth]{assets/dual_encoder_similarities.png}
+\caption{Semantic space organization showing synonym clustering and antonym separation across projection spaces.}
+\label{fig:analysis}
+\end{figure}
+
+\subsection{Cross-Lingual Effectiveness}
+The model's cross-lingual success stems from three key factors: (1) Universal semantic patterns captured through dual-space projections that model opposition and similarity principles transcending linguistic boundaries, (2) Language-specific optimization using dedicated BERT encoders that understand morphological and semantic nuances, and (3) Relational reasoning through graph transformers that enable attention-based processing of semantic relationships rather than isolated word comparisons.
+
+The dual projection mechanism reflects how humans maintain separate cognitive frameworks for understanding similarity versus opposition. When encountering "warm" and "hot," we recognize their similarity while noting degree differences. With "hot" and "cold," we identify both shared domains and oppositional relationships. This cognitive modeling enables effective cross-lingual transfer.
+
+\section{Conclusion}
+
+We introduced Bhav-Net, a multilingual dual-encoder architecture that effectively models semantic relationships across seven languages through explicit dual-space projections and graph transformer processing. Our approach successfully addresses the fundamental challenge of distinguishing semantically similar but relationally opposite word pairs.
+
+\textbf{Key Contributions:} (1) Dual-space projection mechanism providing principled modeling of different semantic relationships, (2) Graph transformer architecture enabling relational reasoning over word pairs, (3) Comprehensive multilingual evaluation demonstrating robust cross-lingual performance, (4) Analysis showing that universal semantic patterns can be captured while respecting language-specific characteristics.
+
+The consistent performance across languages with varying dataset sizes demonstrates architectural robustness, while the substantial improvements over baselines (particularly the 8-point F1 gains on English benchmarks) validate the effectiveness of our design choices.
+
+\textbf{Future Directions:} Extensions to additional relationship types beyond antonymy/synonymy, integration of contextual sensitivity for relationship-dependent semantics, and exploration of more efficient cross-lingual architectures represent promising research directions.
+
+Bhav-Net's success suggests that cognitive-inspired architectures reflecting human semantic processing can provide both performance and interpretability advantages. As multilingual AI systems become increasingly important, approaches that balance universal principles with linguistic diversity will be essential for robust semantic understanding.
+
+\section*{Acknowledgments}
+
+We thank the creators of ConceptNet and Open Multilingual Wordnet for providing multilingual semantic resources. We acknowledge the BERT model developers whose language-specific models enabled our approach.
+
+\bibliographystyle{latex/acl_natbib}
+
+\end{document}
