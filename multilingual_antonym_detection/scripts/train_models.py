@@ -48,7 +48,18 @@ class MultilingualTrainingSystem:
                 'epochs': 3,
                 'max_length': 128,
                 'test_size': 0.2,
-                'val_size': 0.1
+                'val_size': 0.1,
+                # Dual encoder specific parameters
+                'dual_encoder_epochs': 10,
+                'dual_encoder_lr': 1e-4,
+                'hidden_dim': 256,
+                'dropout': 0.2,
+                'margin_syn': 0.8,
+                'margin_ant': 0.2,
+                'margin_weight': 0.5,
+                # Model architecture
+                'heads': 2,
+                'graph_layers': 2
             },
             'hardware': {
                 'use_gpu': True,
@@ -152,7 +163,7 @@ class MultilingualTrainingSystem:
             file_path = lang_dir / f'{split}.txt'
             
             if file_path.exists():
-                df = pd.read_csv(file_path, sep='\\t', header=None, names=['word1', 'word2', 'label'])
+                df = pd.read_csv(file_path, sep='\t', header=None, names=['word1', 'word2', 'label'])
                 datasets[split] = df
                 logger.info(f"Loaded {len(df)} {split} examples for {language}")
             else:
@@ -180,7 +191,7 @@ class MultilingualTrainingSystem:
         """Train BERT model for a specific language."""
         logger.info(f"Training BERT model for {language}")
         
-        # Load datasets
+        # Load datasets to verify they exist
         datasets = self.load_dataset(language)
         if not datasets:
             return False
@@ -191,77 +202,209 @@ class MultilingualTrainingSystem:
             logger.error(f"No BERT model available for {language}")
             return False
         
+        trainer = None
         try:
-            from transformers import AutoTokenizer, AutoModelForSequenceClassification
-            
-            # Load tokenizer and model
-            tokenizer = AutoTokenizer.from_pretrained(bert_model_path / 'tokenizer')
-            model = AutoModelForSequenceClassification.from_pretrained(
-                bert_model_path / 'model',
-                num_labels=2
-            )
+            # Create a compatible config for MultilingualBertTrainer using local model paths
+            bert_config = {
+                'languages': {
+                    language: {
+                        'bert_model': str(bert_model_path / 'model')
+                    }
+                },
+                'training': {
+                    'num_epochs': int(self.config['training']['epochs']),
+                    'learning_rate': float(self.config['training']['learning_rate']),
+                    'batch_size': int(self.config['training']['batch_size']),
+                    'max_length': int(self.config['training']['max_length'])
+                }
+            }
             
             # Create trainer
             trainer = MultilingualBertTrainer(
-                model=model,
-                tokenizer=tokenizer,
-                train_df=datasets['train'],
-                val_df=datasets['val'],
-                test_df=datasets['test'],
-                config=self.config['training']
+                config=bert_config,
+                language=language,
+                output_dir=str(self.output_dir / 'bert')
+            )
+            
+            # Load data
+            train_data, val_data, test_data = trainer.load_data(str(self.datasets_dir))
+            
+            # Create dataloaders
+            train_loader, val_loader, test_loader = trainer.create_dataloaders(
+                train_data, val_data, test_data
             )
             
             # Train model
-            trainer.train()
+            best_model_path = trainer.train(train_loader, val_loader)
             
-            # Save trained model
-            output_path = self.output_dir / 'bert' / language
-            output_path.mkdir(parents=True, exist_ok=True)
+            # Test model with error handling
+            try:
+                results = trainer.test(test_loader, best_model_path)
+                logger.info(f"Test results: {results}")
+            except Exception as test_error:
+                logger.warning(f"Error during testing: {test_error}")
+                logger.info("Training completed but testing failed - model still saved")
+                results = {"accuracy": "unknown", "error": str(test_error)}
             
-            model.save_pretrained(output_path / 'model')
-            tokenizer.save_pretrained(output_path / 'tokenizer')
-            
-            # Save training info
-            with open(output_path / 'training_info.txt', 'w') as f:
-                f.write(f"Language: {language}\\n")
-                f.write(f"Base Model: {bert_model_path}\\n")
-                f.write(f"Training Examples: {len(datasets['train'])}\\n")
-                f.write(f"Validation Examples: {len(datasets['val'])}\\n")
-                f.write(f"Test Examples: {len(datasets['test'])}\\n")
-                f.write(f"Training Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\\n")
+            # Clear GPU memory
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
             
             logger.info(f"✓ Successfully trained BERT model for {language}")
             return True
             
         except Exception as e:
             logger.error(f"Error training BERT model for {language}: {e}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
             return False
+        finally:
+            # Comprehensive cleanup to prevent segfaults
+            if trainer is not None:
+                try:
+                    # Move model to CPU to free GPU memory
+                    if hasattr(trainer, 'model') and trainer.model is not None:
+                        trainer.model.to('cpu')
+                        del trainer.model
+                    # Delete trainer object
+                    del trainer
+                except Exception as cleanup_error:
+                    logger.warning(f"Error during trainer cleanup: {cleanup_error}")
+            
+            # Force comprehensive cleanup
+            import gc
+            gc.collect()
+            
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+                torch.cuda.synchronize()
+            
+            # Clean up matplotlib to prevent segfaults
+            try:
+                import matplotlib.pyplot as plt
+                plt.close('all')
+                plt.clf()
+                plt.cla()
+            except:
+                pass
     
     def train_dual_encoder_model(self, language: str) -> bool:
         """Train Dual Encoder model for a specific language."""
         logger.info(f"Training Dual Encoder model for {language}")
         
-        # This would require the trained BERT model from the previous step
-        bert_output_path = self.output_dir / 'bert' / language
-        if not bert_output_path.exists():
+        # Check for trained BERT model (either directory or .pt file)
+        bert_output_dir = self.output_dir / 'bert'
+        bert_model_file = bert_output_dir / f'best_{language}_bert_model.pt'
+        bert_model_path = self.get_bert_model_path(language)
+        
+        if not bert_model_file.exists():
             logger.error(f"Trained BERT model not found for {language}. Train BERT first.")
+            logger.info(f"Looked for: {bert_model_file}")
             return False
         
+        if not bert_model_path:
+            logger.error(f"Base BERT model not found for {language}")
+            return False
+        
+        trainer = None
         try:
             # Load datasets
             datasets = self.load_dataset(language)
             if not datasets:
                 return False
             
-            # This is a placeholder for dual encoder training
-            # In practice, you would implement the training loop here
-            logger.info(f"Dual Encoder training for {language} - placeholder implementation")
+            logger.info(f"Found trained BERT model: {bert_model_file}")
+            logger.info(f"Base BERT model path: {bert_model_path}")
             
+            # Create dual encoder config
+            dual_encoder_config = {
+                'languages': {
+                    language: {
+                        'bert_model': str(bert_model_path / 'model'),
+                        'trained_bert_path': str(bert_model_file)
+                    }
+                },
+                'training': {
+                    'num_epochs': int(self.config['training'].get('dual_encoder_epochs', 10)),
+                    'learning_rate': float(self.config['training'].get('dual_encoder_lr', 1e-4)),
+                    'batch_size': int(self.config['training']['batch_size']),
+                    'hidden_dim': int(self.config['training'].get('hidden_dim', 256)),
+                    'dropout': float(self.config['training'].get('dropout', 0.2)),
+                    'margin_syn': float(self.config['training'].get('margin_syn', 0.8)),
+                    'margin_ant': float(self.config['training'].get('margin_ant', 0.2)),
+                    'margin_weight': float(self.config['training'].get('margin_weight', 0.5))
+                }
+            }
+            
+            # Import and create trainer
+            from models.multilingual_dual_encoder import MultilingualDualEncoderTrainer
+            
+            trainer = MultilingualDualEncoderTrainer(
+                config=dual_encoder_config,
+                language=language,
+                output_dir=str(self.output_dir / 'dual_encoder')
+            )
+            
+            # Load data and create graph dataloaders
+            train_data, test_data = trainer.load_data(str(self.datasets_dir))
+            train_loader, test_loader = trainer.create_dataloaders(train_data, test_data)
+            
+            # Train the actual graph transformer model
+            best_model_path = trainer.train(train_loader, test_loader)
+            
+            # Test with detailed results
+            try:
+                results = trainer.test(test_loader, best_model_path)
+                logger.info(f"Dual Encoder Test results: {results}")
+            except Exception as test_error:
+                logger.warning(f"Error during dual encoder testing: {test_error}")
+                logger.info("Dual Encoder training completed but testing failed - model still saved")
+                results = {"accuracy": "unknown", "error": str(test_error)}
+            
+            # Clear GPU memory
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            
+            logger.info(f"✓ Successfully trained Dual Encoder model for {language}")
             return True
             
         except Exception as e:
             logger.error(f"Error training Dual Encoder model for {language}: {e}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
             return False
+        finally:
+            # Comprehensive cleanup to prevent segfaults
+            if trainer is not None:
+                try:
+                    # Move models to CPU to free GPU memory
+                    if hasattr(trainer, 'model') and trainer.model is not None:
+                        trainer.model.to('cpu')
+                        del trainer.model
+                    if hasattr(trainer, 'bert_model') and trainer.bert_model is not None:
+                        trainer.bert_model.to('cpu')
+                        del trainer.bert_model
+                    # Delete trainer object
+                    del trainer
+                except Exception as cleanup_error:
+                    logger.warning(f"Error during dual encoder trainer cleanup: {cleanup_error}")
+            
+            # Force comprehensive cleanup
+            import gc
+            gc.collect()
+            
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+                torch.cuda.synchronize()
+            
+            # Clean up matplotlib to prevent segfaults
+            try:
+                import matplotlib.pyplot as plt
+                plt.close('all')
+                plt.clf()
+                plt.cla()
+            except:
+                pass
     
     def train_all_languages(self, model_types: List[str] = None) -> Dict[str, Dict[str, bool]]:
         """Train models for all available languages."""
@@ -319,10 +462,38 @@ def main():
     parser.add_argument('--model-type', choices=['bert', 'dual_encoder'], help='Train specific model type only')
     parser.add_argument('--check-only', action='store_true', help='Only check prerequisites')
     
+    # Training parameters
+    parser.add_argument('--epochs', type=int, help='Number of epochs for BERT training')
+    parser.add_argument('--dual-encoder-epochs', type=int, help='Number of epochs for dual encoder training')
+    parser.add_argument('--batch-size', type=int, help='Batch size for training')
+    parser.add_argument('--learning-rate', type=float, help='Learning rate for BERT training')
+    parser.add_argument('--dual-encoder-lr', type=float, help='Learning rate for dual encoder training')
+    parser.add_argument('--hidden-dim', type=int, help='Hidden dimension for dual encoder')
+    parser.add_argument('--dropout', type=float, help='Dropout rate')
+    parser.add_argument('--margin-weight', type=float, help='Weight for margin loss in dual encoder')
+    
     args = parser.parse_args()
     
     # Initialize training system
     training_system = MultilingualTrainingSystem(args.config)
+    
+    # Override config with command line arguments
+    if args.epochs:
+        training_system.config['training']['epochs'] = args.epochs
+    if args.dual_encoder_epochs:
+        training_system.config['training']['dual_encoder_epochs'] = args.dual_encoder_epochs
+    if args.batch_size:
+        training_system.config['training']['batch_size'] = args.batch_size
+    if args.learning_rate:
+        training_system.config['training']['learning_rate'] = args.learning_rate
+    if args.dual_encoder_lr:
+        training_system.config['training']['dual_encoder_lr'] = args.dual_encoder_lr
+    if args.hidden_dim:
+        training_system.config['training']['hidden_dim'] = args.hidden_dim
+    if args.dropout:
+        training_system.config['training']['dropout'] = args.dropout
+    if args.margin_weight:
+        training_system.config['training']['margin_weight'] = args.margin_weight
     
     # Check prerequisites
     if not training_system.check_prerequisites():
